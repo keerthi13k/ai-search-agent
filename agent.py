@@ -4,9 +4,9 @@ from langchain_core.tools import Tool
 from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
 from langchain_core.prompts import PromptTemplate
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.schema import HumanMessage, AIMessage
-from langchainhub import Client
+from langchain_core.agents import create_react_agent
+from langchain.agents import AgentExecutor
+from langchain_core.messages import HumanMessage, AIMessage
 from dotenv import load_dotenv
 import os
 import math
@@ -50,31 +50,28 @@ def create_agent():
         Tool(
             name="Calculator",
             func=calculator,
-            description="Use this for any math calculations. Input should be a valid Python math expression like '2 ** 10' or 'sqrt(144)'."
+            description="Use this for math calculations. Input should be a Python math expression like '2 ** 10' or 'sqrt(144)'."
         ),
     ]
 
-    # ReAct prompt that supports chat history
-    react_prompt = PromptTemplate.from_template("""Assistant is a large language model.
+    react_prompt = PromptTemplate.from_template("""You are a helpful AI assistant with access to tools.
 
-Assistant has access to the following tools:
-
+You have access to the following tools:
 {tools}
 
-To use a tool, use this format:
-Thought: Do I need to use a tool? Yes
+Use this format EXACTLY:
+Thought: Do I need to use a tool? Yes or No
 Action: the action to take, should be one of [{tool_names}]
 Action Input: the input to the action
 Observation: the result of the action
-
-When you have a response, use this format:
+... (repeat Thought/Action/Action Input/Observation as needed)
 Thought: Do I need to use a tool? No
-Final Answer: [your response here]
+Final Answer: your final answer here
 
 Previous conversation:
 {chat_history}
 
-New question: {input}
+Question: {input}
 {agent_scratchpad}""")
 
     agent = create_react_agent(llm, tools, react_prompt)
@@ -92,7 +89,6 @@ New question: {input}
 
 def ask_agent(agent_executor, question, chat_history):
     try:
-        # Convert chat history to string format
         history_str = ""
         for msg in chat_history:
             if isinstance(msg, HumanMessage):
