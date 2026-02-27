@@ -1,10 +1,10 @@
 from langchain_groq import ChatGroq
-from langchain.agents import AgentExecutor, create_react_agent
 from langchain_tavily import TavilySearch
 from langchain.tools import Tool
 from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
 from langchain import hub
+from langchain.agents import AgentExecutor, create_react_agent
 from langchain.schema import HumanMessage, AIMessage
 from dotenv import load_dotenv
 import os
@@ -16,10 +16,14 @@ def create_agent():
     llm = ChatGroq(
         model="llama-3.3-70b-versatile",
         temperature=0,
-        api_key=os.getenv("GROQ_API_KEY")
+        api_key=os.environ.get("GROQ_API_KEY")
     )
 
-    search = TavilySearch(max_results=5, api_key=os.getenv("TAVILY_API_KEY"))
+    search = TavilySearch(
+        max_results=5,
+        api_key=os.environ.get("TAVILY_API_KEY")
+    )
+
     wiki = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper(top_k_results=2))
 
     def calculator(expression: str) -> str:
@@ -35,27 +39,21 @@ def create_agent():
         Tool(
             name="Web Search",
             func=search.run,
-            description="""Use this to search the internet for current news, 
-            recent events, prices, or anything requiring up-to-date information.
-            Input should be a search query string."""
+            description="Use this to search the internet for current news, recent events, prices, or anything requiring up-to-date information. Input should be a search query string."
         ),
         Tool(
             name="Wikipedia",
             func=wiki.run,
-            description="""Use this for background knowledge, definitions, history, 
-            science, or any factual topic that doesn't need to be current. 
-            Input should be a topic or concept."""
+            description="Use this for background knowledge, definitions, history, science, or any factual topic that doesn't need to be current. Input should be a topic or concept."
         ),
         Tool(
             name="Calculator",
             func=calculator,
-            description="""Use this for any math calculations. 
-            Input should be a valid Python math expression like '2 ** 10' or 'sqrt(144)'."""
+            description="Use this for any math calculations. Input should be a valid Python math expression like '2 ** 10' or 'sqrt(144)'."
         ),
     ]
 
-    prompt = hub.pull("hwchase17/react-chat")  # react-chat supports memory natively
-
+    prompt = hub.pull("hwchase17/react-chat")
     agent = create_react_agent(llm, tools, prompt)
 
     agent_executor = AgentExecutor(
@@ -71,7 +69,6 @@ def create_agent():
 
 def ask_agent(agent_executor, question, chat_history):
     try:
-        # Pass chat history directly each time
         response = agent_executor.invoke({
             "input": question,
             "chat_history": chat_history
