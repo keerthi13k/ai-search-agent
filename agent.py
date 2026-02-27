@@ -34,7 +34,7 @@ def create_agent():
             return f"Calculator error: {str(e)}"
 
     tools = [
-        Tool(name="Web Search", func=search.run,
+        Tool(name="WebSearch", func=search.run,
              description="Search internet for current news, events, prices. Input: search query string."),
         Tool(name="Wikipedia", func=wiki.run,
              description="Get background knowledge, definitions, history, science facts. Input: topic or concept."),
