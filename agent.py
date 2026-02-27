@@ -3,9 +3,10 @@ from langchain_tavily import TavilySearch
 from langchain_core.tools import Tool
 from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
-from langchain import hub
+from langchain_core.prompts import PromptTemplate
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.schema import HumanMessage, AIMessage
+from langchainhub import Client
 from dotenv import load_dotenv
 import os
 import math
@@ -44,7 +45,7 @@ def create_agent():
         Tool(
             name="Wikipedia",
             func=wiki.run,
-            description="Use this for background knowledge, definitions, history, science, or any factual topic that doesn't need to be current. Input should be a topic or concept."
+            description="Use this for background knowledge, definitions, history, science, or any factual topic. Input should be a topic or concept."
         ),
         Tool(
             name="Calculator",
@@ -53,8 +54,30 @@ def create_agent():
         ),
     ]
 
-    prompt = hub.pull("hwchase17/react-chat")
-    agent = create_react_agent(llm, tools, prompt)
+    # ReAct prompt that supports chat history
+    react_prompt = PromptTemplate.from_template("""Assistant is a large language model.
+
+Assistant has access to the following tools:
+
+{tools}
+
+To use a tool, use this format:
+Thought: Do I need to use a tool? Yes
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+
+When you have a response, use this format:
+Thought: Do I need to use a tool? No
+Final Answer: [your response here]
+
+Previous conversation:
+{chat_history}
+
+New question: {input}
+{agent_scratchpad}""")
+
+    agent = create_react_agent(llm, tools, react_prompt)
 
     agent_executor = AgentExecutor(
         agent=agent,
@@ -69,9 +92,17 @@ def create_agent():
 
 def ask_agent(agent_executor, question, chat_history):
     try:
+        # Convert chat history to string format
+        history_str = ""
+        for msg in chat_history:
+            if isinstance(msg, HumanMessage):
+                history_str += f"Human: {msg.content}\n"
+            elif isinstance(msg, AIMessage):
+                history_str += f"Assistant: {msg.content}\n"
+
         response = agent_executor.invoke({
             "input": question,
-            "chat_history": chat_history
+            "chat_history": history_str
         })
         return response["output"]
     except Exception as e:
