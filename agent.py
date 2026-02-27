@@ -76,9 +76,12 @@ Give comprehensive, helpful answers.""")]
             # Execute tool calls
             for tool_call in response.tool_calls:
                 tool_name = tool_call["name"]
-                tool_input = tool_call["args"].get("query", 
-                             tool_call["args"].get("expression",
-                             str(tool_call["args"])))
+               # Get whatever argument Groq sends, regardless of key name
+                args = tool_call["args"]
+                if isinstance(args, dict):
+                    tool_input = next(iter(args.values()), "")
+                else:
+                    tool_input = str(args)
 
                 if tool_name in tool_map:
                     result = tool_map[tool_name].func(tool_input)
