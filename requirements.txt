@@ -1,7 +1,6 @@
-langchain
-langchain-community
 langchain-groq
 langchain-tavily
+langchain-community
 langchainhub
 streamlit
 python-dotenv

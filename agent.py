@@ -3,10 +3,7 @@ from langchain_tavily import TavilySearch
 from langchain_core.tools import Tool
 from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
-from langchain_core.prompts import PromptTemplate
-from langchain_core.agents import create_react_agent
-from langchain.agents import AgentExecutor
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from dotenv import load_dotenv
 import os
 import math
@@ -37,69 +34,64 @@ def create_agent():
             return f"Calculator error: {str(e)}"
 
     tools = [
-        Tool(
-            name="Web Search",
-            func=search.run,
-            description="Use this to search the internet for current news, recent events, prices, or anything requiring up-to-date information. Input should be a search query string."
-        ),
-        Tool(
-            name="Wikipedia",
-            func=wiki.run,
-            description="Use this for background knowledge, definitions, history, science, or any factual topic. Input should be a topic or concept."
-        ),
-        Tool(
-            name="Calculator",
-            func=calculator,
-            description="Use this for math calculations. Input should be a Python math expression like '2 ** 10' or 'sqrt(144)'."
-        ),
+        Tool(name="Web Search", func=search.run,
+             description="Search internet for current news, events, prices. Input: search query string."),
+        Tool(name="Wikipedia", func=wiki.run,
+             description="Get background knowledge, definitions, history, science facts. Input: topic or concept."),
+        Tool(name="Calculator", func=calculator,
+             description="Math calculations. Input: Python math expression like '2**10' or 'sqrt(144)'."),
     ]
 
-    react_prompt = PromptTemplate.from_template("""You are a helpful AI assistant with access to tools.
-
-You have access to the following tools:
-{tools}
-
-Use this format EXACTLY:
-Thought: Do I need to use a tool? Yes or No
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (repeat Thought/Action/Action Input/Observation as needed)
-Thought: Do I need to use a tool? No
-Final Answer: your final answer here
-
-Previous conversation:
-{chat_history}
-
-Question: {input}
-{agent_scratchpad}""")
-
-    agent = create_react_agent(llm, tools, react_prompt)
-
-    agent_executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        verbose=True,
-        handle_parsing_errors=True,
-        max_iterations=10,
-    )
-
-    return agent_executor
+    llm_with_tools = llm.bind_tools(tools)
+    return llm_with_tools, tools
 
 
-def ask_agent(agent_executor, question, chat_history):
+def ask_agent(agent_data, question, chat_history):
     try:
-        history_str = ""
-        for msg in chat_history:
-            if isinstance(msg, HumanMessage):
-                history_str += f"Human: {msg.content}\n"
-            elif isinstance(msg, AIMessage):
-                history_str += f"Assistant: {msg.content}\n"
+        llm_with_tools, tools = agent_data
+        tool_map = {t.name: t for t in tools}
 
-        response = agent_executor.invoke({
-            "input": question,
-            "chat_history": history_str
-        })
-        return response["output"]
+        # Build messages
+        messages = [SystemMessage(content="""You are a helpful AI research assistant. 
+You have access to Web Search, Wikipedia, and Calculator tools.
+Always use tools when you need current information or calculations.
+Give comprehensive, helpful answers.""")]
+
+        # Add chat history
+        for msg in chat_history:
+            messages.append(msg)
+
+        # Add current question
+        messages.append(HumanMessage(content=question))
+
+        # Agentic loop
+        for _ in range(5):
+            response = llm_with_tools.invoke(messages)
+            messages.append(response)
+
+            # If no tool calls, we have final answer
+            if not response.tool_calls:
+                return response.content
+
+            # Execute tool calls
+            for tool_call in response.tool_calls:
+                tool_name = tool_call["name"]
+                tool_input = tool_call["args"].get("query", 
+                             tool_call["args"].get("expression",
+                             str(tool_call["args"])))
+
+                if tool_name in tool_map:
+                    result = tool_map[tool_name].func(tool_input)
+                else:
+                    result = f"Tool {tool_name} not found"
+
+                from langchain_core.messages import ToolMessage
+                messages.append(ToolMessage(
+                    content=str(result),
+                    tool_call_id=tool_call["id"]
+                ))
+
+        return messages[-1].content
+
     except Exception as e:
         return f"Error: {str(e)}"
