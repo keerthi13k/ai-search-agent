@@ -1,6 +1,6 @@
 from langchain_groq import ChatGroq
 from langchain_tavily import TavilySearch
-from langchain.tools import Tool
+from langchain_core.tools import Tool
 from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
 from langchain import hub
